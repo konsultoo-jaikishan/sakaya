@@ -1,0 +1,43 @@
+<odoo>
+    <data>
+        <record id="shipengine_parameter_view" model="ir.ui.view">
+            <field name="name">stock.picking</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//notebook" position='inside'>
+                    <page string="ShipEngine Information"
+                          attrs="{'invisible': [('delivery_type', '!=', 'shipengine')]}">
+                    <group>
+                        <group>
+                            <field name="shipengine_label_url" widget="url"/>
+                            <field name="shipengine_label_id"/>
+                            <field name="shipengine_shipment_id"/>
+                            <field name="carrier_shipping_charge_id" readonly="1"/>
+                            <button type='object' class="fa fa-arrow-right oe_link" name="generate_shipengine_rate"
+                                    string="Get Rate"/>
+                        </group>
+                    </group>
+                    <field name="carrier_shipping_charge_ids" readonly="1">
+                        <tree nolabel="1" readonly="1">
+                            <field name="delivery_carrier_id"/>
+                            <field name="carrier_code"/>
+                            <field name="shipengine_package_type"/>
+                            <field name="carrier_id"/>
+                            <field name="shipengine_rate_id"/>
+                            <field name="service_code"/>
+                            <field name="rate_amount"/>
+                            <field name="shipengine_delivery_days"/>
+                            <field name="shipengine_estimated_delivery_date"/>
+                            <field name="service_availability"/>
+                            <field name="message"/>
+                            <button type='object' class="fa fa-arrow-right oe_link" name="set_service"
+                                    string="Use Service"/>
+                        </tree>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</data>
+        </odoo>

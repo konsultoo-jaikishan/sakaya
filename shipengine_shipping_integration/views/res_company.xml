@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="Shipengine_credential_configuration" model="ir.ui.view">
+        <field name="name">ShipEngine Configuration</field>
+        <field name="model">res.company</field>
+        <field name="type">form</field>
+        <field name="inherit_id" ref="base.view_company_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[last()]" position="after">
+                <page string="ShipEngine Configuration">
+                    <group>
+                        <field name="use_shipengine_shipping_provider"/>
+                    </group>
+                    <group attrs="{'invisible': [('use_shipengine_shipping_provider', '!=', True)],'required':[('use_shipengine_shipping_provider','=',True)]}">
+                        <field name="ship_engine_api_key"
+                               attrs="{'required':[('use_shipengine_shipping_provider','!=',True)]}"></field>
+                        <field name="ship_engine_api_url" widget='url'
+                               attrs="{'required':[('use_shipengine_shipping_provider','!=',True)]}"></field>
+                        <button type="object" name="get_shipengine_carrier"
+                                string="Get Shipengine Carrier" class="oe_highlight"
+                                attrs="{'invisible':[('use_shipengine_shipping_provider','!=',True)]}"/>
+                    </group>
+                </page>
+            </xpath>
+            <xpath expr="//page[last()]" position="after">
+                <page name="shipengine_configuration" string="ShipEngine Account Details"
+                      attrs="{'invisible': [('use_shipengine_shipping_provider','!=',True)]}">
+                    <field name="shipengine_carrier_ids" nolabel="1" readonly="True">
+                        <tree create="0" edit="0" delete="0">
+                            <field name="name" readonly="True"/>
+                            <field name="shipengine_carrier_id" readonly="True"/>
+                            <field name="provider_account_number" readonly="True"/>
+                        </tree>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

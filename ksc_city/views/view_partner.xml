@@ -27,7 +27,7 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_only_form_view"/>
         <field name="arch" type="xml">
-            <field name="base_unit_count" position="after">
+            <field name="categ_id" position="after">
                 <field name="x_studio_merchant"/>
                 <field name="x_studio_merchant_city"/>
                 <field name="x_studio_merchant_country"/>

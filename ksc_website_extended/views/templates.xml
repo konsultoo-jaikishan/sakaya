@@ -474,10 +474,12 @@
 
     <template id="sakaya_payment_delivery_checkbox_inherit" inherit_id="website_sale_delivery.payment_delivery_methods">
         <xpath expr="//input[@name='delivery_type']" position="replace">
-            <input t-att-value="delivery.id" t-att-merchant="merchant.id" t-att-id="'delivery_%i' % delivery.id"
-                   type="radio"
-                   t-att-name="'delivery_type_%i' % merchant.id"
-                   t-att-class="'d-none' if delivery_nb == 1 else ''"/>
+            <t t-if="merchant">
+                <input t-att-value="delivery.id" t-att-merchant="merchant.id" t-att-id="'delivery_%i' % delivery.id"
+                       type="radio"
+                       t-att-name="'delivery_type_%i' % merchant.id"
+                       t-att-class="'d-none' if delivery_nb == 1 else ''"/>
+            </t>
         </xpath>
     </template>
 

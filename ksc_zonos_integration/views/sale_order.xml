@@ -1,0 +1,53 @@
+<?xml version="1.0" ?>
+<odoo>
+
+    <record id="view_order_form_zonos" model="ir.ui.view">
+        <field name="name">sale.order.form.zonos</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <field name="tax_totals_json" position="before">
+                <field name="amount_duties" readonly="1" force_save="1"/>
+                <field name="amount_fees" readonly="1" force_save="1"/>
+                <field name="zonos_tax" readonly="1" force_save="1"/>
+            </field>
+        </field>
+    </record>
+
+    <template id="gst_report_saleorder_document_inherit_zonos" inherit_id="sale.report_saleorder_document">
+        <xpath expr="//t[@t-set='tax_totals']" position="after">
+
+            <tr class="border-black o_total">
+                <td>
+                    <strong>Import - Duties</strong>
+                </td>
+                <td class="text-right">
+                    <span t-field="doc.amount_duties"
+                          t-options="{&quot;widget&quot;: &quot;monetary&quot;, &quot;display_currency&quot;: doc.pricelist_id.currency_id}"/>
+                </td>
+            </tr>
+
+            <tr class="border-black o_total">
+                <td>
+                    <strong>Import - Fees</strong>
+                </td>
+                <td class="text-right">
+                    <span t-field="doc.amount_fees"
+                          t-options="{&quot;widget&quot;: &quot;monetary&quot;, &quot;display_currency&quot;: doc.pricelist_id.currency_id}"/>
+                </td>
+            </tr>
+            <tr class="border-black o_total">
+                <td>
+                    <strong>Import - Tax</strong>
+                </td>
+                <td class="text-right">
+                    <span t-field="doc.zonos_tax"
+                          t-options="{&quot;widget&quot;: &quot;monetary&quot;, &quot;display_currency&quot;: doc.pricelist_id.currency_id}"/>
+                </td>
+            </tr>
+
+        </xpath>
+    </template>
+
+
+</odoo>

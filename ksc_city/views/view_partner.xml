@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_ksc_city" model="ir.ui.view">
+        <field name="name">Partner City</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <field name="vat" position="after">
+                <field name="x_studio_city"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="product_product_view_form_inherit_extended_cap" model="ir.ui.view">
+        <field name="name">product.product.view.form.normal.inherit.extended.cap</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_normal_form_view"/>
+        <field name="arch" type="xml">
+            <field name="categ_id" position="after">
+                <field name="x_studio_merchant"/>
+            </field>
+        </field>
+    </record>
+</odoo>

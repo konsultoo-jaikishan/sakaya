@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="sale_order_portal_content_inherit_sale_stock" name="Orders Shipping Followup"
+              inherit_id="sale.sale_order_portal_content">
+        <xpath expr="//div[@id='total']" position="before">
+            <div class="is-subtotal text-right">
+                <td colspan="99">
+                    <strong class="mr16">Import-Duties</strong>
+                    <span t-field="sale_order.amount_duties" class="monetary_field" style="white-space: nowrap;"
+                          t-options='{
+                      "widget": "monetary",
+                      "display_currency": sale_order.currency_id,
+                  }'/>
+                </td>
+            </div>
+            <div class="is-subtotal text-right">
+                <td colspan="99">
+                    <strong class="mr16">Import-Fees</strong>
+                    <span t-field="sale_order.amount_fees" class="monetary_field" style="white-space: nowrap;"
+                          t-options='{
+                      "widget": "monetary",
+                      "display_currency": sale_order.currency_id,
+                  }'/>
+                </td>
+            </div>
+            <div class="is-subtotal text-right">
+                <td colspan="99">
+                    <strong class="mr16">Import-Tax</strong>
+                    <span t-field="sale_order.zonos_tax" class="monetary_field" style="white-space: nowrap;"
+                          t-options='{
+                      "widget": "monetary",
+                      "display_currency": sale_order.currency_id,
+                  }'/>
+                </td>
+            </div>
+        </xpath>
+    </template>
+    <template id="cart_delivery_inherit_zonos" name="Delivery Costs" inherit_id="website_sale_delivery.cart_delivery">
+        <xpath expr="//tr[@id='order_total']" position="replace">
+            <tr id="order_total">
+                <t t-if="response_template not in ['website_sale.payment', 'website_sale.confirmation']">
+                    <td class="text-right">
+                        <strong>Total:</strong>
+                    </td>
+                    <td class="text-xl-right">
+                        <strong t-field="website_sale_order.amount_total_zonos" class="monetary_field"
+                                t-options='{"widget": "monetary", "display_currency": website_sale_order.pricelist_id.currency_id}'/>
+                    </td>
+                </t>
+                <t t-else="">
+                    <td class="text-right">
+                        <strong>Total:</strong>
+                    </td>
+                    <td class="text-xl-right">
+                        <strong t-field="website_sale_order.amount_total" class="monetary_field"
+                                t-options='{"widget": "monetary", "display_currency": website_sale_order.pricelist_id.currency_id}'/>
+                    </td>
+                </t>
+            </tr>
+        </xpath>
+        <xpath expr="//tr[@id='order_delivery']" position="after">
+            <tr id="order_duties" t-if="website_sale_order and response_template in ['website_sale.payment', 'website_sale.confirmation']">
+                <td class="text-right border-0 text-muted" title="Import Duties">Import Duties:</td>
+                <td class="text-xl-right border-0 text-muted">
+                    <span t-field="website_sale_order.amount_duties" class="monetary_field" style="white-space: nowrap;"
+                          t-options='{
+                      "widget": "monetary",
+                      "display_currency": website_sale_order.currency_id,
+                  }'/>
+                </td>
+            </tr>
+            <tr id="order_fees" t-if="website_sale_order and response_template in ['website_sale.payment', 'website_sale.confirmation']">
+                <td class="text-right border-0 text-muted" title="Import Fees">Import Fees:</td>
+                <td class="text-xl-right border-0 text-muted">
+                    <span t-field="website_sale_order.amount_fees" class="monetary_field" style="white-space: nowrap;"
+                          t-options='{
+                      "widget": "monetary",
+                      "display_currency": website_sale_order.currency_id,
+                  }'/>
+                </td>
+            </tr>
+            <tr id="zonos_tax" t-if="website_sale_order and response_template in ['website_sale.payment', 'website_sale.confirmation']">
+                <td class="text-right border-0 text-muted" title="Import Taxes">Import Taxes:</td>
+                <td class="text-xl-right border-0 text-muted">
+                    <span t-field="website_sale_order.zonos_tax" class="monetary_field" style="white-space: nowrap;"
+                          t-options='{
+                      "widget": "monetary",
+                      "display_currency": website_sale_order.currency_id,
+                  }'/>
+                </td>
+            </tr>
+        </xpath>
+    </template>
+</odoo>

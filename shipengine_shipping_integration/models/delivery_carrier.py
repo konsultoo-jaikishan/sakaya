@@ -3,13 +3,18 @@ from requests import request
 from odoo import models, fields, api, _
 from odoo.exceptions import Warning, ValidationError, UserError
 import logging
+from datetime import timedelta
+
 _logger = logging.getLogger(__name__)
+import requests, base64, sys
+from io import BytesIO
 
 
 class DeliveryCarrier(models.Model):
     _inherit = "delivery.carrier"
 
-    delivery_type = fields.Selection(selection_add=[('shipengine', 'Ship Engine')], ondelete={'shipengine': 'set default'})
+    delivery_type = fields.Selection(selection_add=[('shipengine', 'Ship Engine')],
+                                     ondelete={'shipengine': 'set default'})
     shipengine_confirmation_type = fields.Selection([('none', 'none'),
                                                      ('delivery', 'delivery'),
                                                      ('signature', 'signature'),
@@ -44,8 +49,9 @@ class DeliveryCarrier(models.Model):
     delivered_duty_paid = fields.Boolean(string="Delivered Duty Paid",
                                          help="Indicates that the shipper is paying the international delivery duties for this shipment. This option is supported by UPS, FedEx, and DHL Express.",
                                          default=False)
-    shipengine_bill_to_party=fields.Selection([('recipient', 'recipient'), ('third_party', 'third_party')],
-                                          string="Bill To Part",help="Indicates whether to bill shipping costs to the recipient or to a third-party. When billing to a third-party, the bill_to_account, bill_to_country_code, and bill_to_postal_code fields must also be set.")
+    shipengine_bill_to_party = fields.Selection([('recipient', 'recipient'), ('third_party', 'third_party')],
+                                                string="Bill To Part",
+                                                help="Indicates whether to bill shipping costs to the recipient or to a third-party. When billing to a third-party, the bill_to_account, bill_to_country_code, and bill_to_postal_code fields must also be set.")
     shipengine_weight_unit = fields.Selection([('pound', 'LBS-Pounds'),
                                                ('kilogram', 'KGS-Kilograms'),
                                                ('ounce', 'OZS-Ounces'),
@@ -85,8 +91,9 @@ class DeliveryCarrier(models.Model):
         total_value = order.amount_total
         try:
 
-            res = self.get_shipengine_response_data(shipper_address, receipient_address, total_weight, declared_value=total_value,
-                                                           shipengine_bill_to_account=False)
+            res = self.get_shipengine_response_data(shipper_address, receipient_address, total_weight,
+                                                    declared_value=total_value,
+                                                    shipengine_bill_to_account=False, order=order)
             if res.status_code == 200:
                 response_data = res.json()
                 _logger.info("Response Data %s" % (response_data))
@@ -142,6 +149,25 @@ class DeliveryCarrier(models.Model):
                     [('sale_id', '=', order.id), ('service_availability', '=', True), ('rate_amount', '>', 0)],
                     order='rate_amount', limit=1)
                 order.carrier_shipping_charge_id = charge_id and charge_id.id
+
+
+                # need to remove
+                mer = self.env['ksc.shipping.merchant'].sudo().search([('order_id', '=', order.id)])
+                if mer:
+                    mer.unlink()
+
+                self.env['ksc.shipping.merchant'].sudo().create({
+                    'carrier_id': self.env['delivery.carrier'].sudo().search(
+                        [('delivery_type', 'in', ['shipengine'])]).id,
+                    'price_subtotal': charge_id and charge_id.rate_amount or 0.0,
+                    'order_id': order.id,
+                    'merchant_id': order.order_line.product_id.mapped('x_studio_merchant')[0].id,
+                    'carrier_shipping_charge_id': charge_id and charge_id.id
+                })
+                # need to remove
+
+
+
                 return {'success': True, 'price': charge_id and charge_id.rate_amount or 0.0,
                         'error_message': False, 'warning_message': False}
 
@@ -150,9 +176,8 @@ class DeliveryCarrier(models.Model):
         except Exception as e:
             raise ValidationError(e)
 
-    
     def get_shipengine_response_data(self, shipper_address=False, recipient_address=False, total_weight=False,
-                                      declared_value=False,shipengine_bill_to_account=False):
+                                     declared_value=False, shipengine_bill_to_account=False, order=False):
         api_name = 'rates'
         headers = {"Accept": "application/json",
                    "api-key": "%s" % (self.company_id and self.company_id.ship_engine_api_key),
@@ -162,6 +187,7 @@ class DeliveryCarrier(models.Model):
         for shipengine_carrier in self.shipengine_carrier_ids:
             shipengine_carrier_ids.append(shipengine_carrier.shipengine_carrier_id)
         try:
+            alcohol = True if order.order_line.filtered(lambda x: 'lcohol' in x.product_id.categ_id.display_name) else False
             body = {
                 "shipment": {
                     # We are Not Sending Address Validation API So Directly set Non Validation
@@ -175,7 +201,7 @@ class DeliveryCarrier(models.Model):
                         "non_delivery": "return_to_sender"
                     },
                     "advanced_options": {
-                        "contains_alcohol": False,
+                        "contains_alcohol": alcohol,
                         "delivered_duty_paid": "%s" % (self.delivered_duty_paid),
                         "non_machinable": "%s" % (self.non_machinable),
                         "saturday_delivery": "%s" % (self.saturday_delivery),
@@ -193,6 +219,10 @@ class DeliveryCarrier(models.Model):
                     "carrier_ids": shipengine_carrier_ids
                 }
             }
+            if self.company_id.security_lead != 0 and self.company_id.security_lead < 30:
+                sdate = fields.Date.today() + timedelta(days=self.company_id.security_lead)
+                body['shipment']['ship_date'] = '%s-%s-%s' % (sdate.year, sdate.month, sdate.day)
+
             if self.shipengine_bill_to_party and shipengine_bill_to_account:
                 body['shipment']['advanced_options'].update({
                     "bill_to_account": "%s" % (shipengine_bill_to_account),
@@ -225,7 +255,8 @@ class DeliveryCarrier(models.Model):
             #     "currency": "usd",
             #     "amount": 110
             # },
-            "label_messages": {"reference1": "%s"%(self.shipengine_default_product_packaging_id and self.shipengine_default_product_packaging_id.name)}}
+            "label_messages": {"reference1": "%s" % (
+                    self.shipengine_default_product_packaging_id and self.shipengine_default_product_packaging_id.name)}}
         res.append(pack_dict)
         return res
 
@@ -237,10 +268,10 @@ class DeliveryCarrier(models.Model):
                     raise ValidationError("Rate ID Not Found! Please Click Get Rate!")
                 rate_id = picking.carrier_shipping_charge_id.shipengine_rate_id if picking.carrier_shipping_charge_id.shipengine_rate_id else picking.sale_id.carrier_shipping_charge_id.shipengine_rate_id
                 url = "%slabels/rates/%s" % (
-                self.company_id and self.company_id.ship_engine_api_url,rate_id)
+                    self.company_id and self.company_id.ship_engine_api_url, rate_id)
                 headers = {"Accept": "application/json",
                            "api-key": "%s" % (
-                               self.company_id and self.company_id.ship_engine_api_key),
+                                   self.company_id and self.company_id.ship_engine_api_key),
                            "Content-Type": "application/json"}
                 body = {"test_label": not self.prod_environment, "validate_address": "no_validation",
                         "label_format": "pdf"}
@@ -256,16 +287,45 @@ class DeliveryCarrier(models.Model):
                             final_tracking_no.append(package.get('tracking_number'))
                         # Add tracking Number in package.
                     label_url = response_data.get('label_download').get('href')
+                    if label_url:
+                        buffered = BytesIO(requests.get(label_url).content)
+                        pdf = base64.b64encode(buffered.getvalue())
+                        attachment = self.env['ir.attachment'].create({
+                            'datas': pdf,
+                            'name': '%s_Tracking_%s.pdf' % (picking.name, response_data.get('shipment_id')),
+                            'type': 'binary',
+                        })
+                        picking.message_post(body="Label <br/> Shipment Date: %s" % (response_data.get('ship_date')),
+                                             attachment_ids=[attachment.id])
+                        if picking.is_dropship:
+                            message = _(
+                                "<p>Dear %s,<br/>Here is Label for Shipengine shipment : %s. <br/> Shipment Date: %s </p>") % (
+                                          picking.partner_id.name, response_data.get('shipment_id'),
+                                          response_data.get('ship_date'))
+                            mail_values = {
+                                'subject': _('Tracking %s', response_data.get('shipment_id')),
+                                'body_html': message,
+                                'author_id': self.env.user.partner_id.id,
+                                'email_from': self.env.company.email or self.env.user.email_formatted,
+                                'email_to': picking.partner_id.email,
+                                'attachment_ids': attachment.ids,
+                            }
+                            mail = self.env['mail.mail'].sudo().create(mail_values)
+                            mail.send()
+
                     label_id = response_data.get('label_id')
                     shipment_id = response_data.get('shipment_id')
                     picking.shipengine_label_url = label_url
+                    t_num = response_data.get('tracking_number')
                     picking.shipengine_label_id = label_id
                     picking.shipengine_shipment_id = shipment_id
                     picking.carrier_tracking_ref = ','.join(final_tracking_no) if final_tracking_no else ""
                     shipping_data = {
                         'exact_price': float(
                             picking.sale_id.carrier_shipping_charge_id and picking.sale_id.carrier_shipping_charge_id.rate_amount or 0.0),
-                        'tracking_number': ','.join(final_tracking_no) if final_tracking_no else ""}
+                        # 'tracking_number': ','.join(final_tracking_no) if final_tracking_no else ""
+                        'tracking_number': t_num
+                    }
                     shipping_data = [shipping_data]
                     return shipping_data
                 else:
@@ -274,11 +334,11 @@ class DeliveryCarrier(models.Model):
             except Exception as e:
                 raise ValidationError(e)
 
-    
     def shipengine_cancel_shipment(self, picking):
-        label_id= picking.shipengine_label_id
+        label_id = picking.shipengine_label_id
         if label_id and self.company_id:
-            headers = {"Accept": "application/json", "api-key": "%s" % (self.company_id and self.company_id.ship_engine_api_key),
+            headers = {"Accept": "application/json",
+                       "api-key": "%s" % (self.company_id and self.company_id.ship_engine_api_key),
                        "Content-Type": "application/json"}
             url = "%slabels/%s/void" % (self.company_id and self.company_id.ship_engine_api_url, label_id)
             try:
@@ -287,7 +347,7 @@ class DeliveryCarrier(models.Model):
                     response_data = response_data.json()
                     if response_data.get('approved'):
                         return True
-                    else :
+                    else:
                         raise ValidationError("Cancel process not successed, %s" % (response_data))
                 else:
                     raise ValidationError("Cancel process not successed, %s" % (response_data.text))

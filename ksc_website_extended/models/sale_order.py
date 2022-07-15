@@ -2,6 +2,8 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import Warning, ValidationError, UserError
 import logging
+from datetime import timedelta
+from dateutil.relativedelta import relativedelta
 
 _logger = logging.getLogger(__name__)
 
@@ -9,34 +11,39 @@ _logger = logging.getLogger(__name__)
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    merchant_del_ids = fields.One2many("ksc.shipping.merchant", "order_id")
+    merchant_del_ids = fields.One2many("ksc.shipping.merchant", "order_id", copy=False)
 
     def ksc_check_carrier_quotation(self, carrier_id, merchant_id):
         carrier = self.env['delivery.carrier'].browse(carrier_id)
         res = carrier.rate_shipment_by_merchant(self, merchant_id)
         if res.get('success'):
-            self.set_delivery_line_by_merchant(carrier, merchant_id, res['price'])
+            self.set_delivery_line_by_merchant(carrier, merchant_id, res['price'], res)
             self.delivery_rating_success = True
             self.delivery_message = res['warning_message']
         else:
             self.delivery_rating_success = False
             self.delivery_message = res['error_message']
 
-    def set_delivery_line_by_merchant(self, carrier, merchant_id, price):
+    def set_delivery_line_by_merchant(self, carrier, merchant_id, price, res=False):
+        carrier_shipping_charge_id = False
+        if res and res.get('carrier_shipping_charge_id'):
+            carrier_shipping_charge_id = res.get('carrier_shipping_charge_id')
         shipping_merchant = self.env['ksc.shipping.merchant'].sudo().search(
             [('merchant_id', '=', merchant_id), ('order_id', '=', self.id)])
 
         if shipping_merchant:
             shipping_merchant.sudo().write({
                 'carrier_id': carrier.id,
-                 'price_subtotal': price
+                'price_subtotal': price,
+                'carrier_shipping_charge_id': carrier_shipping_charge_id
             })
         else:
             self.env['ksc.shipping.merchant'].sudo().create({
                 'carrier_id': carrier.id,
                 'price_subtotal': price,
                 'order_id': self.id,
-                'merchant_id': merchant_id
+                'merchant_id': merchant_id,
+                'carrier_shipping_charge_id': carrier_shipping_charge_id
             })
 
         delivery_charge = sum(self.env['ksc.shipping.merchant'].sudo().search(
@@ -47,7 +54,7 @@ class SaleOrder(models.Model):
         del_name = ''
 
         for line in self.env['ksc.shipping.merchant'].sudo().search(
-            [('order_id', '=', self.id)]):
+                [('order_id', '=', self.id)]):
             del_name += line.carrier_id.name + ': ' + str(line.price_subtotal) + ', '
 
         if delv_line:
@@ -123,8 +130,71 @@ class SaleOrder(models.Model):
     #     return super(SaleOrder, self)._remove_delivery_line()
 
 
+class StockPicking(models.Model):
+    _inherit = 'stock.picking'
+
+    update_carrier = fields.Boolean(compute="_compute_update_carrier", store=True)
+
+    @api.depends('is_dropship')
+    def _compute_update_carrier(self):
+        for picking in self:
+            if picking.is_dropship and picking.sale_id:
+                shipping_merchant = self.env['ksc.shipping.merchant'].sudo().search(
+                    [('merchant_id', '=', picking.partner_id.id), ('order_id', '=', picking.sale_id.id)])
+                if shipping_merchant.carrier_id:
+                    picking.carrier_id = shipping_merchant.carrier_id.id
+
+                if shipping_merchant.carrier_shipping_charge_id:
+                    picking.carrier_shipping_charge_id = shipping_merchant.carrier_shipping_charge_id.id
+
+    def _send_confirmation_email(self):
+        for pick in self:
+            if pick.is_dropship and pick.carrier_id.delivery_type == 'shipengine' and pick.carrier_shipping_charge_id:
+                pick.send_to_shipper()
+        return super(StockPicking, self)._send_confirmation_email()
+
+    @api.depends('move_lines.state', 'move_lines.date', 'move_type', 'carrier_id')
+    def _compute_scheduled_date(self):
+        super(StockPicking, self)._compute_scheduled_date()
+        for picking in self:
+            if picking.is_dropship and picking.carrier_id and picking.carrier_id.delivery_type == 'fixed_fifty':
+                sdate = fields.Date.today()
+                if sdate.day > 10:
+                    month = 2
+                else:
+                    month = 1
+                day = sdate.day - 10
+                if sdate.day > 10:
+                    day = -day
+                picking.scheduled_date = (sdate + relativedelta(months=month)) + timedelta(days=day)
+
+
 class DeliveryCarrier(models.Model):
     _inherit = 'delivery.carrier'
+
+    delivery_type = fields.Selection(selection_add=[
+        ('fixed_fifty', '50 Per Bottle'),
+    ], ondelete={'fixed_fifty': 'set default'})
+
+    def fixed_fifty_rate_shipment(self, order):
+        price = 0
+        for line in order.order_line.filtered(lambda l: not l.is_delivery):
+            price += line.product_uom_qty * 50
+
+        return {'success': True,
+                'price': price,
+                'error_message': False,
+                'warning_message': False}
+
+    def fixed_fifty_rate_shipment_by_merchant(self, order, merchant_id):
+        price = 0
+        for line in order.order_line.filtered(lambda l: l.product_id.x_studio_merchant.id == merchant_id):
+            price += line.product_uom_qty * 50
+
+        return {'success': True,
+                'price': price,
+                'error_message': False,
+                'warning_message': False}
 
     def base_on_rule_rate_shipment_by_merchant(self, order, merchant_id):
         carrier = self._match_address(order.partner_shipping_id)
@@ -203,7 +273,7 @@ class DeliveryCarrier(models.Model):
 
             res = self.get_shipengine_response_data(shipper_address, receipient_address, total_weight,
                                                     declared_value=total_value,
-                                                    shipengine_bill_to_account=False)
+                                                    shipengine_bill_to_account=False, order=order)
             if res.status_code == 200:
                 response_data = res.json()
                 _logger.info("Response Data %s" % (response_data))
@@ -259,8 +329,11 @@ class DeliveryCarrier(models.Model):
                     [('sale_id', '=', order.id), ('service_availability', '=', True), ('rate_amount', '>', 0)],
                     order='rate_amount', limit=1)
                 order.carrier_shipping_charge_id = charge_id and charge_id.id
-                return {'success': True, 'price': charge_id and charge_id.rate_amount or 0.0,
-                        'error_message': False, 'warning_message': False}
+                dict_vals = {'success': True, 'price': charge_id and charge_id.rate_amount or 0.0,
+                             'error_message': False, 'warning_message': False}
+                if charge_id:
+                    dict_vals['carrier_shipping_charge_id'] = charge_id.id
+                return dict_vals
 
             else:
                 raise ValidationError("%s, %s, %s" % (res, res.reason, res.text))
@@ -291,3 +364,20 @@ class DeliveryCarrier(models.Model):
         total = self._compute_currency(order, total, 'pricelist_to_company')
 
         return self._get_price_from_picking(total, weight, volume, quantity)
+
+# class ChooseDeliveryCarrier(models.TransientModel):
+#     _inherit = 'choose.delivery.carrier'
+#
+#     def _get_shipment_rate(self):
+#         delivery_price = 0
+#         display_price = 0
+#         for merchant in self.order_id.order_line.product_id.mapped('x_studio_merchant'):
+#             vals = self.carrier_id.rate_shipment_by_merchant(self.order_id, merchant.id)
+#             if vals.get('success'):
+#                 self.delivery_message = vals.get('warning_message', False)
+#                 delivery_price += vals['price']
+#                 display_price += vals['carrier_price']
+#
+#         self.delivery_price = delivery_price
+#         self.display_price = display_price
+#         return {}

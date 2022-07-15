@@ -12,6 +12,11 @@
         'views/sale_order.xml',
         'views/website_sale_delivery_templates.xml'
     ],
+    'assets': {
+        'web.assets_frontend': [
+            'ksc_zonos_integration/static/src/**/*',
+        ],
+    },
     'installable': True,
     'application': False,
     'auto_install': False

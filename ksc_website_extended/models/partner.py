@@ -16,12 +16,11 @@ class PartnerInherit(models.Model):
 
     def _get_portal_order(self, merchant, sale_order):
         result_list = []
-        if self.env.user.id != self.env.ref('base.public_user').id:
-            partner = self.env.user.partner_id
-        else:
-            partner = sale_order.partner_id
+        partner = sale_order.partner_shipping_id
 
-        if merchant.country_id.name == 'Japan' and partner.x_studio_city.id != merchant.x_studio_city.id:
+        if merchant.country_id.code == 'JP' and partner.country_id.code == 'HK':
+            result_list = self.get_merchant_carrier(['fixed_fifty'])
+        elif merchant.country_id.code == 'JP' and partner.x_studio_city.id != merchant.x_studio_city.id:
             result_list = self.get_merchant_carrier(['shipengine'])
         elif merchant.x_studio_city.id == partner.x_studio_city.id:
             result_list = self.get_merchant_carrier(['fixed', 'base_on_rule'])

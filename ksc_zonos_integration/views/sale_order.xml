@@ -19,7 +19,7 @@
 
             <tr class="border-black o_total">
                 <td>
-                    <strong>Import - Duties</strong>
+                    <strong>Import Duties</strong>
                 </td>
                 <td class="text-right">
                     <span t-field="doc.amount_duties"
@@ -29,7 +29,7 @@
 
             <tr class="border-black o_total">
                 <td>
-                    <strong>Import - Fees</strong>
+                    <strong>Carrier Fees</strong>
                 </td>
                 <td class="text-right">
                     <span t-field="doc.amount_fees"
@@ -38,7 +38,7 @@
             </tr>
             <tr class="border-black o_total">
                 <td>
-                    <strong>Import - Tax</strong>
+                    <strong>Taxes</strong>
                 </td>
                 <td class="text-right">
                     <span t-field="doc.zonos_tax"

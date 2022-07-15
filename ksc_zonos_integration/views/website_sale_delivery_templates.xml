@@ -5,7 +5,7 @@
         <xpath expr="//div[@id='total']" position="before">
             <div class="is-subtotal text-right">
                 <td colspan="99">
-                    <strong class="mr16">Import-Duties</strong>
+                    <strong class="mr16">Import Duties</strong>
                     <span t-field="sale_order.amount_duties" class="monetary_field" style="white-space: nowrap;"
                           t-options='{
                       "widget": "monetary",
@@ -15,7 +15,7 @@
             </div>
             <div class="is-subtotal text-right">
                 <td colspan="99">
-                    <strong class="mr16">Import-Fees</strong>
+                    <strong class="mr16">Carrier Fees</strong>
                     <span t-field="sale_order.amount_fees" class="monetary_field" style="white-space: nowrap;"
                           t-options='{
                       "widget": "monetary",
@@ -25,7 +25,7 @@
             </div>
             <div class="is-subtotal text-right">
                 <td colspan="99">
-                    <strong class="mr16">Import-Tax</strong>
+                    <strong class="mr16">Taxes</strong>
                     <span t-field="sale_order.zonos_tax" class="monetary_field" style="white-space: nowrap;"
                           t-options='{
                       "widget": "monetary",
@@ -70,7 +70,7 @@
                 </td>
             </tr>
             <tr id="order_fees" t-if="website_sale_order and response_template in ['website_sale.payment', 'website_sale.confirmation']">
-                <td class="text-right border-0 text-muted" title="Import Fees">Import Fees:</td>
+                <td class="text-right border-0 text-muted" title="Import Fees">Carrier Fees:</td>
                 <td class="text-xl-right border-0 text-muted">
                     <span t-field="website_sale_order.amount_fees" class="monetary_field" style="white-space: nowrap;"
                           t-options='{
@@ -80,7 +80,7 @@
                 </td>
             </tr>
             <tr id="zonos_tax" t-if="website_sale_order and response_template in ['website_sale.payment', 'website_sale.confirmation']">
-                <td class="text-right border-0 text-muted" title="Import Taxes">Import Taxes:</td>
+                <td class="text-right border-0 text-muted" title="Import Taxes">Taxes:</td>
                 <td class="text-xl-right border-0 text-muted">
                     <span t-field="website_sale_order.zonos_tax" class="monetary_field" style="white-space: nowrap;"
                           t-options='{

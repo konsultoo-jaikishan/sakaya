@@ -10,9 +10,9 @@ _logger = logging.getLogger(__name__)
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    amount_duties = fields.Monetary(string='Import-Duties')
-    amount_fees = fields.Monetary(string='Import-Fees')
-    zonos_tax = fields.Monetary(string='Import-Tax')
+    amount_duties = fields.Monetary(string='Import Duties')
+    amount_fees = fields.Monetary(string='Carrier Fees')
+    zonos_tax = fields.Monetary(string='Taxes')
     amount_total_zonos = fields.Monetary(string='Total')
 
     @api.depends('order_line.price_total', 'amount_duties', 'amount_fees', 'zonos_tax')
@@ -48,54 +48,56 @@ class SaleOrder(models.Model):
         self.zonos_tax = taxes
 
     def _get_international_charges(self, merchant_id):
-        order = self
         response_data = {}
-        if order:
-            secret_token = self.company_id.zonos_service_token
-            if secret_token:
-                url = "https://api.zonos.com/v1/landed_cost"
-                headers = {
-                    'zonos-version': '2021-01-01',
-                    'Content-Type': 'application/json',
-                    'serviceToken': secret_token,
+        secret_token = self.company_id.zonos_service_token
+        if secret_token and self.company_id.use_zonos:
+            url = "https://api.zonos.com/v1/landed_cost"
+            headers = {
+                'zonos-version': '2019-11-21',
+                'Content-Type': 'application/json',
+                'serviceToken': secret_token,
+            }
+
+            items = []
+            for line in self.order_line.filtered(
+                    lambda rec: rec.product_id.x_studio_merchant.id == merchant_id.id and not rec.is_delivery):
+                line_vals = {
+                    "id": line.id,
+                    "amount": line.price_unit,
+                    "amount_discount": line.discount,
+                    "category": line.product_id.categ_id.name,
+                    "description_retail": line.product_id.name,
+                    "detail": "",
+                    "quantity": line.product_uom_qty
                 }
+                items.append(line_vals)
 
-                items = []
-                for line in order.order_line.filtered(
-                        lambda rec: rec.product_id.x_studio_merchant.id == merchant_id.id and not rec.is_delivery):
-                    line_vals = {
-                        "id": line.id,
-                        "amount": line.price_subtotal,
-                        "amount_discount": line.discount,
-                        "category": line.product_id.categ_id.name,
-                        "description_retail": line.product_id.name,
-                        "detail": "",
-                        "quantity": line.product_uom_qty
-                    }
-                    items.append(line_vals)
+            shipping = self.env['ksc.shipping.merchant'].sudo().search(
+                [('order_id', '=', self.id), ('merchant_id', '=', merchant_id.id)])
 
-                data = {
-                    "currency": order.currency_id.name,
-                    "items": items,
-                    "ship_from_country": merchant_id.country_id.code,
-                    "ship_to": {
-                        "city": order.partner_shipping_id.city,
-                        "country": order.partner_shipping_id.country_id.code,
-                        "postal_code": order.partner_shipping_id.zip,
-                        "state": order.partner_shipping_id.state_id.code
-                    },
-                    "shipping": {
-                        "amount": 0.0,
-                        "amount_discount": 0,
-                        "service_level": ""
-                    }
+            data = {
+                "currency": self.currency_id.name,
+                "items": items,
+                "ship_from_country": merchant_id.country_id.code,
+                "ship_to": {
+                    "city": self.partner_shipping_id.city,
+                    "country": self.partner_shipping_id.country_id.code,
+                    "postal_code": self.partner_shipping_id.zip,
+                    "state": self.partner_shipping_id.state_id.code
+                },
+                "shipping": {
+                    "amount": shipping.price_subtotal if shipping else 0,
+                    "amount_discount": 0,
+                    "service_level": shipping.carrier_shipping_charge_id.service_code if shipping and shipping.carrier_shipping_charge_id else ""
                 }
+            }
 
-                response = requests.post(url, headers=headers, data=json.dumps(data))
-                if response.status_code == 401:
-                    _logger.warning("Unauthorized Access")
-                    return response_data
+            response = requests.post(url, headers=headers, data=json.dumps(data))
+            if response.status_code == 401:
+                _logger.warning("Unauthorized Access")
+                return response_data
 
-                _logger.warning(json.loads(response.content))
-                response_data = json.loads(response.content)
+            _logger.warning(json.loads(response.content))
+            response_data = json.loads(response.content)
+
         return response_data
